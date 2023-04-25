@@ -1,0 +1,22 @@
+{
+    "page1":{
+    "flight_no":"0",
+    "ADEP":"OIII",
+    "ADES":"OIMM",
+    "STD":"2022-12-25 07:09",
+    "STA":"2022-12-25 07:09",
+    "Tail_id":"EP-NSR"
+    },
+    "page2":{
+        "UseMETAR":false,
+        "WindDirec":"250",
+        "WindSpeed":"4",
+        "OAT":"4",
+        "QNH":"3005",
+        "Runway":"DRY",
+        "Flaps":"OPT",
+        "AntiIce":"OFF",
+        "Packs":"AUTO",
+        "Improved":"NO"
+    }
+}
