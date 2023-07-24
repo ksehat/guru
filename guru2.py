@@ -41,7 +41,7 @@ def get_booking_page(data):
     options.add_argument('--ignore-certificate-errors')
     options.add_argument('--incognito')
     # options.add_argument('--headless')
-    driver = webdriver.Chrome(chrome_options=options)
+    driver = webdriver.Chrome(options=options, )
     driver.get(url=url)
     WebDriverWait(driver, 20).until(
         EC.element_to_be_clickable((By.XPATH, '//*[@id="ErrorCatching-app"]/div[1]/div/div[1]/div[1]/div[2]/input')))
@@ -122,8 +122,11 @@ def get_booking_page(data):
             stringBox.send_keys(data['STD'])
             # flight Tail-ID
             click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div/div[1]/form/div/div[2]/div/div/div')
-            WebDriverWait(driver, 20).until(
-                EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["Tail_id"]}")]'))).click()
+            try:
+                WebDriverWait(driver, 20).until(
+                    EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["Tail_id"]}")]'))).click()
+            except:
+                return 'Tail_id is not available.'
             # flight ADES
             stringBox = driver.find_element(By.XPATH, '//*[@id="ades"]')
             stringBox.send_keys(data['ADES'])

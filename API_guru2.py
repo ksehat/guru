@@ -40,6 +40,11 @@ def home():
                 with open('request_status.txt', 'w') as f:
                     f.write('0')
                     in_process = 0
+                if type(result) == str:
+                    final_result = {}
+                    final_result['success'] = False
+                    final_result['responseMessages'] = [result]
+                    return result
             except:
                 with open('request_status.txt', 'w') as f:
                     f.write('0')
@@ -57,7 +62,5 @@ def home():
         return result
 
 
-# host_IP = f'{input("Please inset IP:")}'
-# host_port = f'{input("Please inset port:")}'
 if __name__ == '__main__':
-    serve(app=app, host='192.168.40.155', port='8087')
+    serve(app=app, host='192.168.115.10', port='8087')
