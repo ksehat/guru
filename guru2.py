@@ -1,14 +1,51 @@
-import copy
+import os
+import requests
+import json
 import time
-from datetime import datetime
+from datetime import datetime as dt
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.chrome.service import Service
 import logging
 import re
+
+
+def call_login_token():
+    dict1 = {
+        "username": "k.sehat",
+        "password": "Ks@123456",
+        "applicationType": 961,
+        "iP": "1365"
+    }
+    r = requests.post(url='http://192.168.115.10:8081/api/Authentication/RequestToken',
+                      json=dict1,
+                      )
+    token = json.loads(r.text)['token']
+    expire_date = json.loads(r.text)['expires']
+    return token, expire_date
+
+
+def api_token_handler():
+    if 'token_expire_date.txt' in os.listdir():
+        with open('token_expire_date.txt', 'r') as f:
+            te = f.read()
+        expire_date = te.split('token:')[0]
+        token = te.split('token:')[1]
+        if dt.now() >= dt.strptime(expire_date, '%Y-%m-%d'):
+            token, expire_date = call_login_token()
+            expire_date = expire_date.split('T')[0]
+            with open('token_expire_date.txt', 'w') as f:
+                f.write(expire_date + 'token:' + token)
+    else:
+        token, expire_date = call_login_token()
+        expire_date = expire_date.split('T')[0]
+        with open('token_expire_date.txt', 'w') as f:
+            f.write(expire_date + 'token:' + token)
+    return token
 
 
 def click_operation(driver, xpath):
@@ -27,21 +64,13 @@ def send_keys_operations(driver, xpath, keys):
 
 
 def get_booking_page(data):
-    # Create logger and assign handler
-    logging.basicConfig(filename='log.log', filemode='a', format="%(asctime)s|%(levelname)s|%(name)s|%(message)s")
-    logger = logging.getLogger("guru")
-    # handler = logging.FileHandler('log.log')
-    # handler.setFormatter(logging.Formatter())
-    # logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-    logger.info('Application started.')
     url: str = ("https://www.flygp.se/guru2/v3.5/")
     options = webdriver.ChromeOptions()
     options.add_argument('--ignore-certificate-errors')
     options.add_argument('--incognito')
     # options.add_argument('--headless')
-    driver = webdriver.Chrome(options=options, )
+    driver = webdriver.Chrome(options=options, service=Service(
+        "C:\Project\sepehr_scrapper\chromedriver-win64\chromedriver-win64/chromedriver.exe"))
     driver.get(url=url)
     WebDriverWait(driver, 20).until(
         EC.element_to_be_clickable((By.XPATH, '//*[@id="ErrorCatching-app"]/div[1]/div/div[1]/div[1]/div[2]/input')))
@@ -53,12 +82,18 @@ def get_booking_page(data):
     passBox.send_keys('09125820385')
     click_operation(driver, '//*[@id="ErrorCatching-app"]/div[1]/div/div[2]/button')
 
-    logger.info('Logged in.')
-
     try:
-        WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH, '//span[contains(text(), "Close")]'))).click()
+        WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((By.XPATH, '//span[contains(text(), "Close")]'))).click()
         # driver.find_element(By.XPATH, '//span[contains(text(), "Close")]').click()
         driver.find_element(By.XPATH, '//span[contains(text(), "Update all")]').click()
+    except:
+        pass
+
+    try:
+        driver.find_element(By.XPATH,
+                            '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div/div[2]/div[2]/button[2]/span').click()
+        time.sleep(5)
     except:
         pass
 
@@ -71,161 +106,50 @@ def get_booking_page(data):
         click_operation(driver, '//div[@id="clickDiv"]')
     except:
         pass
+
     click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div/button/span')
 
-
-    counter = 0
-    rows = driver.find_elements(By.XPATH,
-                                "//tr[@class='MuiTableRow-root MuiPaper-root sc-jNnpgg jIfccS MuiPaper-elevation1 MuiPaper-rounded']")
-    if rows:
-        while True:
-            if counter <= len(rows):
-                rows = driver.find_elements(By.XPATH,"//tr[@class='MuiTableRow-root MuiPaper-root sc-jNnpgg jIfccS MuiPaper-elevation1 MuiPaper-rounded']")
-                counter = len(rows)
-                driver.execute_script("arguments[0].scrollIntoView();", rows[-1])  # scroll to last row
-                time.sleep(1)
-                rows = driver.find_elements(By.XPATH,"//tr[@class='MuiTableRow-root MuiPaper-root sc-jNnpgg jIfccS MuiPaper-elevation1 MuiPaper-rounded']")
-                counter += 1
-            else:
-                break
-
-
-        list_of_available_flights_detail = [x.text.split('\n') for x in rows]
-        [x.remove(x[-2]) for x in list_of_available_flights_detail]
-        data_list = [x for x in data.values()][:-10]
-        org_dest = data_list[1] + ' - ' + data_list[2]
-        m1 = datetime.strptime(data_list[3], '%Y-%m-%d %H:%M').strftime('%b %d').upper()
-        t1 = datetime.strptime(data_list[3], '%Y-%m-%d %H:%M').strftime('%H:%M') + ' - ' + datetime.strptime(
-            data_list[3], '%Y-%m-%d %H:%M').strftime('%H:%M') + ' UTC'
-        data_list_reformet = [data_list[0],m1,org_dest,t1,data_list[-1]]
-        try:
-            idx_available_in_flights = list_of_available_flights_detail.index(data_list_reformet)
-            list_of_clickable_table_rows = driver.find_elements(By.XPATH, '//td[@class="MuiTableCell-root MuiTableCell-body right"]//p[@class="MuiTypography-root sc-iTVJFM oxVOu MuiTypography-body1"]')
-            element1 = list_of_clickable_table_rows[idx_available_in_flights]
-            time.sleep(1)
-            ActionChains(driver).move_to_element(element1).perform()
-            element1.click()
-            WebDriverWait(driver, 20).until(
-                EC.element_to_be_clickable((By.XPATH, '//span[@class="MuiButton-label" and text()="Use Flight"]'))).click()
-            WebDriverWait(driver, 20).until(
-                EC.element_to_be_clickable(
-                    (By.XPATH, '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[2]/button[1]/span'))).click()
-        except:
-            # flight no
-            stringBox = driver.find_element(By.XPATH, '//*[@id="flightNo"]')
-            stringBox.send_keys(data['flight_no'])
-            # flight ADEP
-            stringBox = driver.find_element(By.XPATH, '//*[@id="adep"]')
-            stringBox.send_keys(data['ADEP'])
-            # flight STD
-            stringBox = driver.find_element(By.XPATH, '//*[@id="std"]')
-            stringBox.send_keys(data['STD'])
-            # flight Tail-ID
-            click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div/div[1]/form/div/div[2]/div/div/div')
-            try:
-                WebDriverWait(driver, 20).until(
-                    EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["Tail_id"]}")]'))).click()
-            except:
-                return 'Tail_id is not available.'
-            # flight ADES
-            stringBox = driver.find_element(By.XPATH, '//*[@id="ades"]')
-            stringBox.send_keys(data['ADES'])
-            # flight STA
-            stringBox = driver.find_element(By.XPATH, '//*[@id="sta"]')
-            stringBox.send_keys(data['STA'])
-            click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div/div[1]/form/div/div[8]/button[2]/span')
-    else:
-        # flight no
-        stringBox = driver.find_element(By.XPATH, '//*[@id="flightNo"]')
-        stringBox.send_keys(data['flight_no'])
-        # flight ADEP
-        stringBox = driver.find_element(By.XPATH, '//*[@id="adep"]')
-        stringBox.send_keys(data['ADEP'])
-        # flight STD
-        stringBox = driver.find_element(By.XPATH, '//*[@id="std"]')
-        stringBox.send_keys(data['STD'])
-        # flight Tail-ID
-        click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div/div[1]/form/div/div[2]/div/div/div')
+    # flight no
+    stringBox = driver.find_element(By.XPATH, '//*[@id="flightNo"]')
+    stringBox.send_keys(data['flightNo'])
+    # flight ADEP
+    stringBox = driver.find_element(By.XPATH, '//*[@id="adep"]')
+    stringBox.send_keys(data['adep'])
+    # flight STD
+    stringBox = driver.find_element(By.XPATH, '//*[@id="std"]')
+    stringBox.send_keys(data['std'])
+    # flight Tail-ID
+    click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div/div[1]/form/div/div[2]/div/div/div')
+    try:
         WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["Tail_id"]}")]'))).click()
-        # flight ADES
-        stringBox = driver.find_element(By.XPATH, '//*[@id="ades"]')
-        stringBox.send_keys(data['ADES'])
-        # flight STA
-        stringBox = driver.find_element(By.XPATH, '//*[@id="sta"]')
-        stringBox.send_keys(data['STA'])
-        click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div/div[1]/form/div/div[8]/button[2]/span')
-
-    logger.info('First page params are filled and create button clicked.')
-
-    if data['UseMETAR']:
-        try:
-            WebDriverWait(driver, 20).until(
-                EC.element_to_be_clickable((By.XPATH, '//span[@class="MuiButton-label" and text()="Load METAR"]'))).click()
-        except:
-            pass
-        click_operation(driver, '//*[@id="123123"]')
-
-    else:
-        if len(data['WindSpeed']) < 2:
-            send_keys_operations(driver, '//*[@id="windInput"]', data['WindDirect'] + '/0' + data['WindSpeed'])
-        else:
-            send_keys_operations(driver, '//*[@id="windInput"]', data['WindDirec'] + data['WindSpeed'])
-        elem1 = WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, '//*[@id="oat"]')))
-        elem1.send_keys(Keys.CONTROL, "a")
-        elem1.send_keys(Keys.DELETE)
-        elem1.send_keys(data['OAT'])
-        # click QNH inHg
-        click_operation(driver,
-                        '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div/div[2]/form/div[1]/div[1]/div[3]/div[2]/div')
-        WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "inHg")]'))).click()
-        elem1 = WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, '//*[@id="qnh"]')))
-        elem1.clear()
-        elem1.send_keys(int(re.split(r'(\d+)', data['QNH'])[1]) / 100)
-
-        # click Runway
-        click_operation(driver,
-                        '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div/div[2]/form/div[1]/div[2]/div/div')
-        WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["Runway"]}")]'))).click()
-        # click Flaps
-        click_operation(driver,
-                        '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div/div[2]/form/div[2]/div[1]/div[1]/div/div/div')
-        WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["Flaps"]}")]'))).click()
-        # click AntiIce
-        click_operation(driver,
-                        '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div/div[2]/form/div[2]/div[1]/div[2]/div/div/div')
-        WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["AntiIce"]}")]'))).click()
-        # click Packs
-        click_operation(driver,
-                        '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div/div[2]/form/div[2]/div[1]/div[3]/div/div/div')
-        WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["Packs"]}")]'))).click()
-        # click Improved
-        click_operation(driver,
-                        '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div/div[2]/form/div[2]/div[1]/div[4]/div/div/div')
-        WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["Improved"]}")]'))).click()
-        logger.info('Second page params are filled and create button clicked.')
-
-    # click Runways tab
-    elem1 = WebDriverWait(driver, 20).until(
-        EC.element_to_be_clickable((By.XPATH, '//*[@id="mass"]')))
-    elem1.send_keys(Keys.CONTROL, "a")
-    elem1.send_keys(Keys.DELETE)
-    elem1.send_keys('0')
-    click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[2]/button[2]/span')
-    logger.info('Runways button clicked.')
-
+            EC.element_to_be_clickable((By.XPATH, f'//li[contains(text(), "{data["tail_id"]}")]'))).click()
+    except:
+        return 'Tail_id is not available.'
+    # flight ADES
+    stringBox = driver.find_element(By.XPATH, '//*[@id="ades"]')
+    stringBox.send_keys(data['ades'])
+    # flight STA
+    stringBox = driver.find_element(By.XPATH, '//*[@id="sta"]')
+    stringBox.send_keys(data['sta'])
+    click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div/div[1]/form/div/div[8]/button[2]/span')
+    # click use metar
     WebDriverWait(driver, 120).until(EC.element_to_be_clickable(
-        (By.XPATH, '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div[2]/header/div/div[1]/button')))
-    logger.info('Add NOTAM button is clickable.')
-
+        (By.XPATH, '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div/div[2]/label/span[2]')))
+    click_operation(driver, '//*[@id="123123"]')
+    # driver.find_element(By.XPATH,
+    #                     '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[3]/div/div[2]/label/span[2]').click()
+    # enter mass
+    WebDriverWait(driver, 120).until(
+        EC.element_to_be_clickable((By.XPATH, '//*[@id="mass"]')))
+    driver.find_element(By.XPATH, '//*[@id="mass"]').send_keys('0')
+    # click Runways tab
+    WebDriverWait(driver, 120).until(
+        EC.element_to_be_clickable((By.XPATH, '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[2]/button[2]/span')))
+    click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[2]/button[2]/span')
+    # wait untill the results are available
+    WebDriverWait(driver, 120).until(EC.presence_of_element_located(
+        (By.XPATH, '//p[@class="MuiTypography-root MuiListItemText-secondary MuiTypography-body2 MuiTypography-colorTextSecondary MuiTypography-displayBlock"]')))
+    time.sleep(10)
     not_empty = True
     i = 0
     result_list = []
@@ -238,17 +162,49 @@ def get_booking_page(data):
         except Exception as e:
             not_empty = False
             # logger.error(f'Error occured while reading row {i} the table and error is: {e}.')
-    logger.info('Result is ready and process finished.')
+
     result1 = []
     for l in result_list:
         dict1 = {
-            'BandNo': l[0],
-            'Feet': l[1],
-            'Weight': l[2]
+            "fkFlightInformation": data['fkFlightInformation'],
+            "flightNumber": data['flightNo'],
+            'bandNumber': l[0],
+            'feet': l[1],
+            'weight': l[2]
         }
         result1.append(dict1)
-    result = {'GetAllCrudRobotsResponseItemViewModels': result1}
+    result = {'guruBatchRequestItemViewModels': result1}
+    # TODO: the driver wait should be added and the open website should be handled.
+    driver.close()
     return result
 
-# result = get_booking_page('THR', 'AWZ', 1, 0, 0, '1401-10-01', '1401-10-02')
-# print(result)
+
+token = api_token_handler()
+r = requests.get(url='http://192.168.115.10:8081/api/Guru/GetAllFlightsForGuru',
+                 headers={'Authorization': f'Bearer {token}',
+                          'Content-type': 'application/json',
+                          })
+data = json.loads(r.content)
+danger_counter = 0
+while not len(data['getAllFlightsForGuruItemsResponseViewModels']) == 0:
+    danger_counter += 1
+    flight = data['getAllFlightsForGuruItemsResponseViewModels'][0]
+    try:
+        result = get_booking_page(flight)
+    except:
+        data['getAllFlightsForGuruItemsResponseViewModels'].append(
+            data['getAllFlightsForGuruItemsResponseViewModels'][0])
+        data['getAllFlightsForGuruItemsResponseViewModels'].pop(0)
+    try:
+        requests.post(url='http://192.168.115.10:8081/api/Guru/GetAllFlightsForGuru',
+                      json=result,
+                      headers={'Authorization': f'Bearer {token}',
+                               'Content-type': 'application/json',
+                               })
+        data['getAllFlightsForGuruItemsResponseViewModels'].pop(0)
+    except:
+        print(
+            f'Results for flight fkFlightInformation:{data["fkFlightInformation"]} and flightNumber:{data["flightNo"]} were not imported to database.')
+        data['getAllFlightsForGuruItemsResponseViewModels'].append(
+            data['getAllFlightsForGuruItemsResponseViewModels'][0])
+        data['getAllFlightsForGuruItemsResponseViewModels'].pop(0)
