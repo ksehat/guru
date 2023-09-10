@@ -148,7 +148,8 @@ def get_booking_page(data):
     click_operation(driver, '//*[@id="ErrorCatching-app"]/div/div/div[2]/div[2]/button[2]/span')
     # wait untill the results are available
     WebDriverWait(driver, 120).until(EC.presence_of_element_located(
-        (By.XPATH, '//p[@class="MuiTypography-root MuiListItemText-secondary MuiTypography-body2 MuiTypography-colorTextSecondary MuiTypography-displayBlock"]')))
+        (By.XPATH,
+         '//p[@class="MuiTypography-root MuiListItemText-secondary MuiTypography-body2 MuiTypography-colorTextSecondary MuiTypography-displayBlock"]')))
     time.sleep(10)
     not_empty = True
     i = 0
@@ -169,8 +170,8 @@ def get_booking_page(data):
             "fkFlightInformation": data['fkFlightInformation'],
             "flightNumber": data['flightNo'],
             'bandNumber': l[0],
-            'feet': l[1],
-            'weight': l[2]
+            'feet': int(l[1].split(' ')[0]),
+            'weight': int(l[2].split((' '))[0])
         }
         result1.append(dict1)
     result = {'guruBatchRequestItemViewModels': result1}
@@ -196,12 +197,17 @@ while not len(data['getAllFlightsForGuruItemsResponseViewModels']) == 0:
             data['getAllFlightsForGuruItemsResponseViewModels'][0])
         data['getAllFlightsForGuruItemsResponseViewModels'].pop(0)
     try:
-        requests.post(url='http://192.168.115.10:8081/api/Guru/GetAllFlightsForGuru',
-                      json=result,
-                      headers={'Authorization': f'Bearer {token}',
-                               'Content-type': 'application/json',
-                               })
-        data['getAllFlightsForGuruItemsResponseViewModels'].pop(0)
+        r_final = requests.post(url='http://192.168.115.10:8081/api/Guru/CreateGuruBatch',
+                                json=result,
+                                headers={'Authorization': f'Bearer {token}',
+                                         'Content-type': 'application/json',
+                                         })
+        if r_final.status_code == 200 and json.loads(r_final.text)['msg'] == 'Records saved successfully ':
+            data['getAllFlightsForGuruItemsResponseViewModels'].pop(0)
+        else:
+            data['getAllFlightsForGuruItemsResponseViewModels'].append(
+                data['getAllFlightsForGuruItemsResponseViewModels'][0])
+            data['getAllFlightsForGuruItemsResponseViewModels'].pop(0)
     except:
         print(
             f'Results for flight fkFlightInformation:{data["fkFlightInformation"]} and flightNumber:{data["flightNo"]} were not imported to database.')
